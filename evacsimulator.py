@@ -4,11 +4,12 @@ import pyvisgraph as vg
 from shapely.geometry import Point, Polygon
 
 # Simulation parameters
-time_step = 0.1
-num_steps = 200
+time_step = 0.1 # Unit is seconds
 number_of_agents = 10
 agent_radius = 5 # Unit is 100mm
-agent_max_speed = 10 # max moving speed, unit is 100mm/time_step so if time_setp is 0.1 and speed is 5 then it is 0.05 m/s
+agent_max_speed = 10 # max moving speed, unit is 100mm/time_step so if time_step is 0.1 and speed is 5 then it is 0.05 m/s
+avg_reaction_time = 5 # average time for agents to react to fire alarm
+variance_for_reaction_time = 3 
 
 ## Building the building blueprint ##
 
@@ -46,20 +47,21 @@ class Exit:
         self.y = y
 
 class Agent:
-    def __init__(self, x, y, vx, vy, speed, exit, radius=agent_radius):
-        self.x = x              # Current x position
-        self.y = y              # Current y position
-        self.vx = vx            # Velocity in x direction
-        self.vy = vy            # Velocity in y direction
-        self.speed = speed      # Current speed
-        self.radius = radius    # Radius
-        self.targetx = exit.x   # Location of exit x-coordinate
-        self.targety = exit.y   # Location of exit y-coordinate
-        self.path = []          # Path in form of visuality graph and all the nodes in this list
-        self.path_index = 0     # Index for the next point in the path
-        self.safe = False       # Indicates whether agent has safely exited the building
-        self.reset_path = False # Shows that path needs to be calculated again
-        self.waiting = False    # Waits for other agent to pass
+    def __init__(self, x, y, vx, vy, speed, exit, reaction_time):
+        self.x = x                          # Current x position
+        self.y = y                          # Current y position
+        self.vx = vx                        # Velocity in x direction
+        self.vy = vy                        # Velocity in y direction
+        self.speed = speed                  # Current speed
+        self.radius = agent_radius          # Radius
+        self.targetx = exit.x               # Location of exit x-coordinate
+        self.targety = exit.y               # Location of exit y-coordinate
+        self.path = []                      # Path in form of visuality graph and all the nodes in this list
+        self.path_index = 0                 # Index for the next point in the path
+        self.safe = False                   # Indicates whether agent has safely exited the building
+        self.reset_path = False             # Shows that path needs to be calculated again
+        self.waiting = True                 # Waits for other agent to pass
+        self.reaction_time = reaction_time  # Time to react to fire alarm
 
     def draw(self, screen):
         pygame.draw.circle(screen, RED, (int(self.x), int(self.y)), agent_radius)
@@ -354,7 +356,8 @@ def spawnAgents(exits):
             if not validPosition((x, y), agents):
                 speed = 0
                 exit = np.random.choice(exits)
-                agent = Agent(x, y, 0, 0, speed, exit)
+                reaction_time = np.random.normal(avg_reaction_time, variance_for_reaction_time)
+                agent = Agent(x, y, 0, 0, speed, exit, reaction_time)
                 agents.append(agent)
                 break
     return agents
@@ -437,6 +440,7 @@ def main():
     exits = generateExits()
     agents = spawnAgents(exits)
     clock = pygame.time.Clock()
+    time = 0
 
     # Calculates initial paths
     for agent in agents:
@@ -447,6 +451,9 @@ def main():
             if event.type == pygame.QUIT:
                 run = False
         
+        # Time in seconds
+        time += clock.get_time()*0.001
+        
         # Clears the screen between each time step
         screen.fill(WHITE)
 
@@ -454,7 +461,7 @@ def main():
         for i in range(len(agents)-1, -1, -1): # backwards iteration to pop agents during the loop
             agent = agents[i]
             distances = agent.objectInSector(agents)
-            if not agent.detectCollision(agents, time_step):
+            if not agent.detectCollision(agents, time_step) and not agent.waiting:
                 if distances[0] < 50:
                     agent.dodge(distances)
                 else:
@@ -468,7 +475,7 @@ def main():
                 agent.speed = 0
             elif agent.detectCollision(agents, time_step) == "agent passing":
                 agent.moveAlongPath(time_step*0.5)
-            else:
+            elif agent.reaction_time < time:
                 agent.waiting = False
             if not agent.waiting and agent.speed < 1:
                 agent.speed = 1
@@ -484,8 +491,8 @@ def main():
    
         pygame.display.update()
 
-        # Caps the frame rate to 120 FPS
-        clock.tick(120)
+        # Caps the frame rate to 60 FPS
+        clock.tick(60)
 
     pygame.quit()
 

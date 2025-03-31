@@ -5,7 +5,7 @@ from shapely.geometry import Point, Polygon
 
 # Simulation parameters
 time_step = 0.1 # Unit is seconds
-number_of_agents = 10
+number_of_agents = 20
 agent_radius = 5 # Unit is 100mm
 agent_max_speed = 10 # max moving speed, unit is 100mm/time_step so if time_step is 0.1 and speed is 5 then it is 0.05 m/s
 avg_reaction_time = 5 # average time for agents to react to fire alarm
@@ -14,14 +14,13 @@ variance_for_reaction_time = 3
 ## Building the building blueprint ##
 
 # Exit locations
-exit_locations = [[50,50],[500,550]]
+exit_locations = [[820,290]]
 
 # Walls
 # top left corner is (0.0, 0.0) and down right corner is (SCREEN_WIDTH, SCREEN_HEIGHT)
 polys = [[vg.Point(100.0,500.0), vg.Point(800.0,500.0), vg.Point(800,300.0), vg.Point(790,300.0),
           vg.Point(790,490.0), vg.Point(110,490.0), vg.Point(110,110.0), vg.Point(790,110.0), 
-          vg.Point(790,280.0), vg.Point(800,280.0), vg.Point(800,100.0), vg.Point(100,100.0)],
-          [vg.Point(200.0,400.0), vg.Point(700.0,400.0), vg.Point(700,200.0), vg.Point(200,200.0)]]
+          vg.Point(790,280.0), vg.Point(800,280.0), vg.Point(800,100.0), vg.Point(100,100.0)]]
 
 # initialization for visualization
 pygame.init()
@@ -114,14 +113,14 @@ class Agent:
             self.speed = agent_max_speed
         # Try to always keep the maximum speed
         if self.speed < agent_max_speed:
-            self.speed *= 1.01
+            self.speed *= 1.05
         if self.speed < 1:
             self.speed = 1
 
         # Slow down when near next path step i.e in corners
-        if distance < 50:
+        if distance < 25:
             if self.speed*1.5 > agent_max_speed:
-                self.speed *= 0.97
+                self.speed *= 0.92
                 
         if distance > 0:
             self.vx = (direction_x / distance) * self.speed
@@ -171,27 +170,29 @@ class Agent:
         if distance == 0:
             distance = 1
         rng_vector = np.random.rand(2,1)
-        if 0.001 > rng_vector[0]:
-            if rng_vector[1] < 0.5: # dodge to left
+        if 0.002 > rng_vector[0]:
+            if rng_vector[1] < 0.5: # random movement to left
                 new_direction_x = -direction_y/distance
                 new_direction_y = direction_x/distance
                 if distances[1] < distances[4]:
                     new_x = self.x + new_direction_x * (distances[1] - self.radius - 6)
                     new_y = self.y + new_direction_y * (distances[1] - self.radius - 6)
                 else:
-                    new_x = self.x + new_direction_x * (distances[4] - self.radius - 6)
-                    new_y = self.y + new_direction_y * (distances[4] - self.radius - 6)
+                    random_movement_distance = distances[4]*0.5 + np.random.rand()*(distances[4]*0.5)
+                    new_x = self.x + new_direction_x * (random_movement_distance - self.radius - 6)
+                    new_y = self.y + new_direction_y * (random_movement_distance - self.radius - 6)
                 new_path_point = vg.Point(new_x, new_y)
                 self.path.insert(self.path_index, new_path_point)
-            if rng_vector[1] > 0.5: # dodge to right
+            if rng_vector[1] > 0.5: # random movement to right
                 new_direction_x = direction_y/distance
                 new_direction_y = -direction_x/distance
                 if distances[2] < distances[5]:
                     new_x = self.x + new_direction_x * (distances[2] - self.radius - 6)
                     new_y = self.y + new_direction_y * (distances[2] - self.radius - 6)
                 else:
-                    new_x = self.x + new_direction_x * (distances[5] - self.radius - 6)
-                    new_y = self.y + new_direction_y * (distances[5] - self.radius - 6)
+                    random_movement_distance = distances[5]*0.5 + np.random.rand()*(distances[5]*0.5)
+                    new_x = self.x + new_direction_x * (random_movement_distance - self.radius - 6)
+                    new_y = self.y + new_direction_y * (random_movement_distance - self.radius - 6)
                 new_path_point = vg.Point(new_x, new_y)
                 self.reset_path = True
         return None 
@@ -318,14 +319,14 @@ class Agent:
         points_right.append(Point(self.x, self.y))
 
         sector_polygon = Polygon([(p.x, p.y) for p in points])
-        sector_coords = [(int(p.x), int(p.y)) for p in points]
-        sector_coords_left = [(int(p.x), int(p.y)) for p in points_left]
+        #sector_coords = [(int(p.x), int(p.y)) for p in points]
+        #sector_coords_left = [(int(p.x), int(p.y)) for p in points_left]
         sector_polygon_left = Polygon([(p.x, p.y) for p in points_left])
-        sector_coords_right = [(int(p.x), int(p.y)) for p in points_right]
+        #sector_coords_right = [(int(p.x), int(p.y)) for p in points_right]
         sector_polygon_right = Polygon([(p.x, p.y) for p in points_right])
-        pygame.draw.polygon(screen, BLUE, sector_coords, 1)
-        pygame.draw.polygon(screen, RED, sector_coords_left, 1)
-        pygame.draw.polygon(screen, BLUE, sector_coords_right, 1)
+        #pygame.draw.polygon(screen, BLUE, sector_coords, 1)
+        #pygame.draw.polygon(screen, RED, sector_coords_left, 1)
+        #pygame.draw.polygon(screen, BLUE, sector_coords_right, 1)
 
         return sector_polygon, sector_polygon_left, sector_polygon_right
     def moveAwayFromWall(self, agents, dt):
@@ -461,6 +462,7 @@ def main():
         for i in range(len(agents)-1, -1, -1): # backwards iteration to pop agents during the loop
             agent = agents[i]
             distances = agent.objectInSector(agents)
+            print(round(time,2))
             if not agent.detectCollision(agents, time_step) and not agent.waiting:
                 if distances[0] < 50:
                     agent.dodge(distances)
@@ -481,7 +483,7 @@ def main():
                 agent.speed = 1
             agent.draw(screen)
             if agent.safe == True:
-                print("Safe!")
+                print("Safe!", round(time,2))
                 agents.pop(i)
 
         # Draws obstacles

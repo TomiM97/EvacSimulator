@@ -2,22 +2,26 @@ import numpy as np
 import pygame
 import pyvisgraph as vg
 from shapely.geometry import Point, Polygon
+import matplotlib.pyplot as plt
 
 # Simulation parameters
 time_step = 0.1 # Unit is seconds
 number_of_agents = 20
-agent_radius = 5 # Unit is 100mm
-agent_max_speed = 10 # max moving speed, unit is 100mm/time_step so if time_step is 0.1 and speed is 5 then it is 0.05 m/s
-avg_reaction_time = 5 # average time for agents to react to fire alarm
-variance_for_reaction_time = 3 
+agent_radius = 5 # Unit is dm (0.1 m), source https://dined.io.tudelft.nl/en/database/tool "Breath over elbows" (simplified to 5)
+agent_max_speed = 12.7 # max moving speed, unit is dm/s (0.1 m/s), source SFPE handbook of FPE Table 3-13.5 
+avg_reaction_time = 6*60 + 30
+sd_reaction_time = 3 # average time in seconds for agents to react to fire alarm, only the variance considered and 
+# average just added to the total time from SFPE handbook of FPE Table 3-13.1 (6 minutes) so here the reaction time and variance are same even if in reality thet aren't
+
 
 ## Building the building blueprint ##
 
-# Exit locations
-exit_locations = [[820,290]]
+# Exit location(s)
+exit_locations = [[820,300]]
 
 # Walls
-# top left corner is (0.0, 0.0) and down right corner is (SCREEN_WIDTH, SCREEN_HEIGHT)
+# top left corner is (0.0, 0.0) and down right corner is (SCREEN_WIDTH, SCREEN_HEIGHT), (x,y)
+# here unit is also dm
 polys = [[vg.Point(100.0,500.0), vg.Point(800.0,500.0), vg.Point(800,300.0), vg.Point(790,300.0),
           vg.Point(790,490.0), vg.Point(110,490.0), vg.Point(110,110.0), vg.Point(790,110.0), 
           vg.Point(790,280.0), vg.Point(800,280.0), vg.Point(800,100.0), vg.Point(100,100.0)]]
@@ -46,13 +50,13 @@ class Exit:
         self.y = y
 
 class Agent:
-    def __init__(self, x, y, vx, vy, speed, exit, reaction_time):
+    def __init__(self, x, y, vx, vy, speed, radius, exit, reaction_time):
         self.x = x                          # Current x position
         self.y = y                          # Current y position
         self.vx = vx                        # Velocity in x direction
         self.vy = vy                        # Velocity in y direction
         self.speed = speed                  # Current speed
-        self.radius = agent_radius          # Radius
+        self.radius = radius                # Radius
         self.targetx = exit.x               # Location of exit x-coordinate
         self.targety = exit.y               # Location of exit y-coordinate
         self.path = []                      # Path in form of visuality graph and all the nodes in this list
@@ -60,10 +64,10 @@ class Agent:
         self.safe = False                   # Indicates whether agent has safely exited the building
         self.reset_path = False             # Shows that path needs to be calculated again
         self.waiting = True                 # Waits for other agent to pass
-        self.reaction_time = reaction_time  # Time to react to fire alarm
+        self.reaction_time = reaction_time + avg_reaction_time  # Time to react to fire alarm
 
     def draw(self, screen):
-        pygame.draw.circle(screen, RED, (int(self.x), int(self.y)), agent_radius)
+        pygame.draw.circle(screen, RED, (int(self.x), int(self.y)), self.radius)
     def update(self, dt):
         self.x += self.vx * dt
         self.y += self.vy * dt
@@ -205,7 +209,6 @@ class Agent:
         # Collision with polygon check
         for poly in polys:
             shapely_poly = Polygon([(p.x, p.y) for p in poly]) # Turn pyvisgraph poly into shapely poly
-
             if agent_circle.intersects(shapely_poly):
                 return "wall"
             
@@ -215,24 +218,33 @@ class Agent:
                 continue
 
             other_agent_circle = Point(other_agent.x + other_agent.vx*dt, other_agent.y + other_agent.vy*dt).buffer(other_agent.radius)
-            # Initial touch with other agent
-            if agent_circle.intersects(other_agent_circle) and not self.waiting and not other_agent.waiting:
-                if np.random.rand() > 0.5:
+            collision = agent_circle.intersects(other_agent_circle)
+
+            # If no collision
+            if not collision:
+                continue
+
+            # Prioritize faster moving agent
+            if collision and not self.waiting and not other_agent.waiting:
+                if self.speed < other_agent.speed:
                     self.waiting = True
                 else:
                     other_agent.waiting = True
+
             # If both are waiting for some reason
-            elif agent_circle.intersects(other_agent_circle) and self.waiting and other_agent.waiting:
+            elif collision and self.waiting and other_agent.waiting:
                 if np.random.rand() > 0.5:
                     self.waiting = False
                 else:
                     other_agent.waiting = False
+
             # If agent is waiting
-            if agent_circle.intersects(other_agent_circle) and self.waiting and not other_agent.waiting:
-                return "agent waiting"
+            if collision and self.waiting and not other_agent.waiting:
+                return "waiting"
+            
             # If agent is passing
-            elif agent_circle.intersects(other_agent_circle) and not self.waiting and other_agent.waiting:
-                return "agent passing"
+            elif collision and not self.waiting and other_agent.waiting:
+                return "passing"
             
         # If no collision is detected
         return False
@@ -282,9 +294,11 @@ class Agent:
                     distance_to_wall = shapely_poly.distance(Point(self.x, self.y))
                     if distances[5] > distance_to_wall:
                         distances[5] = distance_to_wall
-        # Slow down the agent depending on the distance to the other agents in front sector
+        # Slow down the agent depending on the distance to the other agents in all sectors
         if distances[0] < sector_range:
-            self.speed = agent_max_speed * (distances[0]/sector_range)
+            self.speed = agent_max_speed * ((distances[0] - sector_range - agent_radius*2 - 5)/(sector_range)) + agent_max_speed
+            if self.speed < 0:
+                self.speed = 0
         return distances
     def createSectorPolygon(self):
         angle_rad = np.radians(45 / 2)
@@ -351,14 +365,15 @@ def spawnAgents(exits):
     agents = []
     for _ in range(number_of_agents):
         while True:
-            x = np.random.uniform(100, 800)
+            x = np.random.uniform(110, 800)
             y = np.random.uniform(100, 500)
 
             if not validPosition((x, y), agents):
                 speed = 0
                 exit = np.random.choice(exits)
-                reaction_time = np.random.normal(avg_reaction_time, variance_for_reaction_time)
-                agent = Agent(x, y, 0, 0, speed, exit, reaction_time)
+                reaction_time = np.random.normal(sd_reaction_time, sd_reaction_time)
+                radius = agent_radius
+                agent = Agent(x, y, 0, 0, speed, radius, exit, reaction_time)
                 agents.append(agent)
                 break
     return agents
@@ -434,14 +449,30 @@ def isInnerCorner(previous_normal_vector, current_normal_vector):
     else:
         return False  # not an inner corner
 
+## Plot ##
+
+def plotTimes(safe_times):
+    x = safe_times
+    y = np.arange(1, len(safe_times) + 1)
+
+    plt.figure(figsize=(8, 5))
+    plt.step(x, y, where='post', label='Cumulative exits')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Number of agents evacuated')
+    plt.title('Agent exits over time')
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
 ## Running of the code ##
 
 def main():
     run = True
     exits = generateExits()
     agents = spawnAgents(exits)
-    clock = pygame.time.Clock()
-    time = 0
+    clock = pygame.time.Clock() # Used only for visualisation
+    time = avg_reaction_time
+    safe_times = []
 
     # Calculates initial paths
     for agent in agents:
@@ -453,7 +484,7 @@ def main():
                 run = False
         
         # Time in seconds
-        time += clock.get_time()*0.001
+        time += time_step
         
         # Clears the screen between each time step
         screen.fill(WHITE)
@@ -462,29 +493,31 @@ def main():
         for i in range(len(agents)-1, -1, -1): # backwards iteration to pop agents during the loop
             agent = agents[i]
             distances = agent.objectInSector(agents)
-            print(round(time,2))
-            if not agent.detectCollision(agents, time_step) and not agent.waiting:
+            collision = agent.detectCollision(agents, time_step)
+            if not collision and not agent.waiting:
                 if distances[0] < 50:
                     agent.dodge(distances)
                 else:
                     agent.randomMovement(distances)
                 agent.moveAlongPath(time_step)
-            elif agent.detectCollision(agents, time_step) == "wall":
+            elif collision == "wall":
                 agent.speed = 0
                 agent.moveAwayFromWall(agents, time_step)
                 agent.checkClosestRoute()
-            elif agent.detectCollision(agents, time_step) == "agent waiting":
+            elif collision == "waiting":
                 agent.speed = 0
-            elif agent.detectCollision(agents, time_step) == "agent passing":
-                agent.moveAlongPath(time_step*0.5)
-            elif agent.reaction_time < time:
+            elif collision == "passing":
+                agent.moveAlongPath(time_step)
+            elif agent.reaction_time <= time:
                 agent.waiting = False
-            if not agent.waiting and agent.speed < 1:
-                agent.speed = 1
             agent.draw(screen)
             if agent.safe == True:
-                print("Safe!", round(time,2))
+                safe_times.append(time)
                 agents.pop(i)
+        
+        if len(agents) == 0:
+            plotTimes(safe_times)
+            run = False
 
         # Draws obstacles
         for poly in polys:

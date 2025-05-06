@@ -3,34 +3,38 @@ import pygame
 import pyvisgraph as vg
 from shapely.geometry import Point, Polygon
 import matplotlib.pyplot as plt
+from openpyxl import load_workbook, Workbook
+import os
 
-# Simulation parameters
+# Simulation parameters 
+## ALL SPATIAL VALUES ARE DOUBLED FOR THE SAKE OF VISUALISATION ##
+times_to_run_simulation = 50 # remember to remove output.xlsx before running
 time_step = 0.1 # Unit is seconds
-number_of_agents = 20
-agent_radius = 5 # Unit is dm (0.1 m), source https://dined.io.tudelft.nl/en/database/tool "Breath over elbows" (simplified to 5)
-agent_max_speed = 12.7 # max moving speed, unit is dm/s (0.1 m/s), source SFPE handbook of FPE Table 3-13.5 
-avg_reaction_time = 6*60 + 30
-sd_reaction_time = 3 # average time in seconds for agents to react to fire alarm, only the variance considered and 
+number_of_agents = 15
+agent_radius = 5 # Unit is dm (0.1 m), source https://dined.io.tudelft.nl/en/database/tool "Breath over elbows" (simplified to 5) (In reality 2.5)
+agent_max_speed = 12.7*2 # max moving speed, unit is dm/s (0.1 m/s), source SFPE handbook of FPE Table 3-13.5 (doubled because spatial distances are doubled too)
+sd_reaction_time = 30 
+avg_reaction_time = 6*60 + sd_reaction_time 
+# average time in seconds for agents to react to fire alarm, only the variance considered and
 # average just added to the total time from SFPE handbook of FPE Table 3-13.1 (6 minutes) so here the reaction time and variance are same even if in reality thet aren't
 
 
 ## Building the building blueprint ##
 
 # Exit location(s)
-exit_locations = [[820,300]]
+exit_locations = [[320,400]]
 
 # Walls
 # top left corner is (0.0, 0.0) and down right corner is (SCREEN_WIDTH, SCREEN_HEIGHT), (x,y)
-# here unit is also dm
-polys = [[vg.Point(100.0,500.0), vg.Point(800.0,500.0), vg.Point(800,300.0), vg.Point(790,300.0),
-          vg.Point(790,490.0), vg.Point(110,490.0), vg.Point(110,110.0), vg.Point(790,110.0), 
-          vg.Point(790,280.0), vg.Point(800,280.0), vg.Point(800,100.0), vg.Point(100,100.0)]]
+# here unit is also dm but double here too all values
+polys = [[vg.Point(100,500), vg.Point(300,500), vg.Point(300, 412), vg.Point(305,412),
+          vg.Point(305, 505), vg.Point(95,505), vg.Point(95,295), vg.Point(305, 295),
+          vg.Point(305, 388), vg.Point(300, 388), vg.Point(300, 300), vg.Point(100, 300)]]
+polys[0].reverse()
 
 # initialization for visualization
-pygame.init()
 SCREEN_WIDTH = 1200
 SCREEN_HEIGHT = 800
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
 # Colour initialization for pygame
 RED = (255, 0, 0)
@@ -365,8 +369,8 @@ def spawnAgents(exits):
     agents = []
     for _ in range(number_of_agents):
         while True:
-            x = np.random.uniform(110, 800)
-            y = np.random.uniform(100, 500)
+            x = np.random.uniform(100, 300)
+            y = np.random.uniform(300, 500)
 
             if not validPosition((x, y), agents):
                 speed = 0
@@ -464,9 +468,34 @@ def plotTimes(safe_times):
     plt.legend()
     plt.show()
 
+## Write an excel ##
+
+def writeExcel(safe_times, iteration):
+    filename = "output.xlsx"
+
+    if iteration == 0:
+        workbook = Workbook()
+        worksheet = workbook.active
+    if os.path.exists(filename):
+        workbook = load_workbook(filename)
+        worksheet = workbook.active
+    
+
+    worksheet.cell(1, iteration+1, f"Iteration {iteration+1}")
+    for i, time in enumerate(safe_times):
+        worksheet.cell(i+2, iteration+1).value = time
+
+
+    workbook.save(filename)
+
+
+
 ## Running of the code ##
 
-def main():
+def main(iteration):
+    pygame.init()
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+
     run = True
     exits = generateExits()
     agents = spawnAgents(exits)
@@ -516,7 +545,8 @@ def main():
                 agents.pop(i)
         
         if len(agents) == 0:
-            plotTimes(safe_times)
+            #plotTimes(safe_times)
+            writeExcel(safe_times, iteration)
             run = False
 
         # Draws obstacles
@@ -531,4 +561,7 @@ def main():
 
     pygame.quit()
 
-main()
+# Run simulation x times
+
+for i in range(times_to_run_simulation):
+    main(i)

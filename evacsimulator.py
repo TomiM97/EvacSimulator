@@ -8,9 +8,9 @@ import os
 
 # Simulation parameters 
 ## ALL SPATIAL VALUES ARE DOUBLED FOR THE SAKE OF VISUALISATION ##
-times_to_run_simulation = 1 # remove output.xlsx before running if you want to save the data (if there is one)
+times_to_run_simulation = 50 # remove output.xlsx before running if you want to save the data (if there is one)
 time_step = 0.1 # Unit is seconds
-number_of_agents = 20
+number_of_agents = 30
 agent_radius = 5 # Unit is dm (0.1 m), source https://dined.io.tudelft.nl/en/database/tool "Breath over elbows" (simplified to 5) (In reality 2.5)
 agent_max_speed = 12.7*2 # max moving speed, unit is dm/s (0.1 m/s), source SFPE handbook of FPE Table 3-13.5 (doubled because spatial distances are doubled too)
 sd_reaction_time = 30 
@@ -27,9 +27,9 @@ exit_locations = [[330,600]]
 # Walls
 # top left corner is (0.0, 0.0) and down right corner is (SCREEN_WIDTH, SCREEN_HEIGHT), (x,y)
 # here unit is also dm but double here too all values
-polys = [[vg.Point(100,700), vg.Point(300,700), vg.Point(300, 612), vg.Point(305,612),
+polys = [[vg.Point(100,700), vg.Point(300,700), vg.Point(300, 614), vg.Point(305,614),
           vg.Point(305, 705), vg.Point(95,705), vg.Point(95,495), vg.Point(305, 495),
-          vg.Point(305, 588), vg.Point(300, 588), vg.Point(300, 500), vg.Point(100, 500)]]
+          vg.Point(305, 586), vg.Point(300, 586), vg.Point(300, 500), vg.Point(100, 500)]]
 polys[0].reverse()
 
 # initialization for visualization

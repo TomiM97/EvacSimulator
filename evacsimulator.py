@@ -8,9 +8,9 @@ import os
 
 # Simulation parameters 
 ## ALL SPATIAL VALUES ARE DOUBLED FOR THE SAKE OF VISUALISATION ##
-times_to_run_simulation = 50 # remember to remove output.xlsx before running
+times_to_run_simulation = 1 # remove output.xlsx before running if you want to save the data (if there is one)
 time_step = 0.1 # Unit is seconds
-number_of_agents = 15
+number_of_agents = 20
 agent_radius = 5 # Unit is dm (0.1 m), source https://dined.io.tudelft.nl/en/database/tool "Breath over elbows" (simplified to 5) (In reality 2.5)
 agent_max_speed = 12.7*2 # max moving speed, unit is dm/s (0.1 m/s), source SFPE handbook of FPE Table 3-13.5 (doubled because spatial distances are doubled too)
 sd_reaction_time = 30 
@@ -22,14 +22,14 @@ avg_reaction_time = 6*60 + sd_reaction_time
 ## Building the building blueprint ##
 
 # Exit location(s)
-exit_locations = [[320,400]]
+exit_locations = [[330,600]]
 
 # Walls
 # top left corner is (0.0, 0.0) and down right corner is (SCREEN_WIDTH, SCREEN_HEIGHT), (x,y)
 # here unit is also dm but double here too all values
-polys = [[vg.Point(100,500), vg.Point(300,500), vg.Point(300, 412), vg.Point(305,412),
-          vg.Point(305, 505), vg.Point(95,505), vg.Point(95,295), vg.Point(305, 295),
-          vg.Point(305, 388), vg.Point(300, 388), vg.Point(300, 300), vg.Point(100, 300)]]
+polys = [[vg.Point(100,700), vg.Point(300,700), vg.Point(300, 612), vg.Point(305,612),
+          vg.Point(305, 705), vg.Point(95,705), vg.Point(95,495), vg.Point(305, 495),
+          vg.Point(305, 588), vg.Point(300, 588), vg.Point(300, 500), vg.Point(100, 500)]]
 polys[0].reverse()
 
 # initialization for visualization
@@ -145,7 +145,7 @@ class Agent:
         distance = np.sqrt(direction_x**2 + direction_y**2)
         if distance == 0:
             distance = 1
-        rng_vector = np.random.rand(2,1)
+        rng_vector = np.random.rand(2)
         if (distances[0]*2)/sector_range < rng_vector[0]: # dodging agents
             if rng_vector[1] < 0.5: # dodge to left
                 new_direction_x = -direction_y/distance
@@ -168,7 +168,8 @@ class Agent:
                     new_x = self.x + new_direction_x * (distances[5] - self.radius - 6)
                     new_y = self.y + new_direction_y * (distances[5] - self.radius - 6)
                 new_path_point = vg.Point(new_x, new_y)
-                self.reset_path = True
+                self.path.insert(self.path_index, new_path_point)
+            self.reset_path = True
     def randomMovement(self, distances):
         # Current direction
         target_point = self.path[self.path_index]
@@ -177,7 +178,7 @@ class Agent:
         distance = np.sqrt(direction_x**2 + direction_y**2)
         if distance == 0:
             distance = 1
-        rng_vector = np.random.rand(2,1)
+        rng_vector = np.random.rand(2)
         if 0.002 > rng_vector[0]:
             if rng_vector[1] < 0.5: # random movement to left
                 new_direction_x = -direction_y/distance
@@ -202,7 +203,8 @@ class Agent:
                     new_x = self.x + new_direction_x * (random_movement_distance - self.radius - 6)
                     new_y = self.y + new_direction_y * (random_movement_distance - self.radius - 6)
                 new_path_point = vg.Point(new_x, new_y)
-                self.reset_path = True
+                self.path.insert(self.path_index, new_path_point)
+            self.reset_path = True
         return None 
 
     ## Collision detection and handling ##
@@ -370,7 +372,7 @@ def spawnAgents(exits):
     for _ in range(number_of_agents):
         while True:
             x = np.random.uniform(100, 300)
-            y = np.random.uniform(300, 500)
+            y = np.random.uniform(500, 700)
 
             if not validPosition((x, y), agents):
                 speed = 0
